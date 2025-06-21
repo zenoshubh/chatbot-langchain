@@ -1,7 +1,7 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
-import chatApp from './langchain';
-import { v4 as uuidv4 } from "uuid";
+import { graphWithMemory, createThreadConfig} from './langchain';
+import { HumanMessage } from '@langchain/core/messages';
 
 
 const app = express()
@@ -15,26 +15,31 @@ app.use(express.json({ limit: "16kb" }))
 app.use(express.text());     // for text/plain
 
 
-app.post('/chat', async (req, res) => {
-    const message = req.body;
-    const config = { configurable: { thread_id: "random_sessionId" } };
-    const input = {
-        messages: [
-            {
-                role: "user",
-                content: message,
-            },
-        ],
-    };
+app.post('/chat', async (req: Request, res: Response) => {
+    try {
+        const message = req.body;
 
-    const output = await chatApp.invoke(input, config);
-    const response = output.messages[output.messages.length - 1];
+        // Use provided sessionId or generate a new one
+        const threadId = "session1";
+        const config = createThreadConfig(threadId);
 
-    res.status(200).json({
-        AI: response?.content,
-    })
+        const input = {
+            messages: [
+                new HumanMessage(message.trim())
+            ],
+        };
 
+        const output = await graphWithMemory.invoke(input, config);
+        const response = output.messages[output.messages.length - 1];
+
+        res.status(200).json({
+            AI: response?.content,
+            sessionId: threadId
+        });
+    } catch (error) {
+        console.error('Chat error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 })
-
 
 export default app
